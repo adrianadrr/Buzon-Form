@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buzón de Formación — Solicitar capacitación</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #f4f5f7;
+    margin: 0;
+    padding: 24px 16px;
+  }
+  .card {
+    max-width: 560px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.subtitle { color: #666; margin-top: 0; margin-bottom: 24px; font-size: 14px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 16px 0 6px; }
+  label .opcional { font-weight: 400; color: #888; font-size: 12px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d5d7db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  .radio-group { display: flex; gap: 16px; margin-top: 6px; }
+  .radio-group label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+  button {
+    margin-top: 24px;
+    width: 100%;
+    padding: 12px;
+    background: #005874;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { background: #9aa0a6; cursor: not-allowed; }
+  .mensaje { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 14px; display: none; }
+  .mensaje.exito { background: #e6f4ea; color: #1e7e34; display: block; }
+  .mensaje.error { background: #fce8e6; color: #c5221f; display: block; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Solicitar capacitación</h1>
+  <p class="subtitle">Completá el formulario y el coordinador de tu país recibirá tu pedido.</p>
+
+  <form id="form-solicitud">
+    <label>Nombre completo</label>
+    <input type="text" id="nombre_completo" required>
+
+    <label>Cargo <span class="opcional">(opcional)</span></label>
+    <input type="text" id="cargo">
+
+    <label>País</label>
+    <select id="pais_id" required>
+      <option value="" disabled selected>Cargando países...</option>
+    </select>
+
+    <label>Ciudad</label>
+    <input type="text" id="ciudad" required>
+
+    <label>Tema / Descripción</label>
+    <input type="text" id="tema" required placeholder="¿Qué te gustaría aprender?">
+
+    <label>Justificación <span class="opcional">(opcional)</span></label>
+    <textarea id="justificacion" placeholder="¿Por qué es importante esta capacitación?"></textarea>
+
+    <label>Objetivo / Contexto <span class="opcional">(opcional)</span></label>
+    <textarea id="objetivo_contexto"></textarea>
+
+    <label>Público objetivo</label>
+    <div class="radio-group">
+      <label><input type="radio" name="publico_objetivo" value="abierto" checked> Abierto</label>
+      <label><input type="radio" name="publico_objetivo" value="restringido"> Restringido a mi equipo</label>
+    </div>
+
+    <button type="submit" id="btn-enviar">Enviar solicitud</button>
+    <div class="mensaje" id="mensaje"></div>
+  </form>
+</div>
+
+<script>
+  // ==== CONFIGURACIÓN ====
+  const SUPABASE_URL = "https://giimzpijeeaionkyoieo.supabase.co";
+  const ANON_KEY = "sb_publishable_420HDkpmnhN6tQWlEOYTZw_uB9pjMAL";
+
+  const selectPais = document.getElementById("pais_id");
+  const form = document.getElementById("form-solicitud");
+  const btnEnviar = document.getElementById("btn-enviar");
+  const mensaje = document.getElementById("mensaje");
+
+  // Cargar lista de países desde la vista pública (API REST automática de Supabase)
+  async function cargarPaises() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/paises_publico?select=id,nombre&order=nombre`, {
+        headers: { apikey: ANON_KEY }
+      });
+      const paises = await res.json();
+
+      selectPais.innerHTML = '<option value="" disabled selected>Elegí tu país</option>';
+      paises.forEach(pais => {
+        const opt = document.createElement("option");
+        opt.value = pais.id;
+        opt.textContent = pais.nombre;
+        selectPais.appendChild(opt);
+      });
+    } catch (err) {
+      selectPais.innerHTML = '<option value="" disabled selected>Error al cargar países</option>';
+    }
+  }
+
+  cargarPaises();
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btnEnviar.disabled = true;
+    btnEnviar.textContent = "Enviando...";
+    mensaje.className = "mensaje";
+
+    const body = {
+      nombre_completo: document.getElementById("nombre_completo").value,
+      cargo: document.getElementById("cargo").value || null,
+      pais_id: selectPais.value,
+      ciudad: document.getElementById("ciudad").value,
+      tema: document.getElementById("tema").value,
+      justificacion: document.getElementById("justificacion").value || null,
+      objetivo_contexto: document.getElementById("objetivo_contexto").value || null,
+      publico_objetivo: document.querySelector('input[name="publico_objetivo"]:checked').value,
+    };
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/enviar-solicitud`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: ANON_KEY },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        mensaje.textContent = "¡Listo! Tu solicitud fue enviada correctamente.";
+        mensaje.classList.add("exito");
+        form.reset();
+      } else {
+        mensaje.textContent = "Hubo un error: " + (data.error || "intentá de nuevo.");
+        mensaje.classList.add("error");
+      }
+    } catch (err) {
+      mensaje.textContent = "No se pudo conectar. Revisá tu conexión e intentá de nuevo.";
+      mensaje.classList.add("error");
+    } finally {
+      btnEnviar.disabled = false;
+      btnEnviar.textContent = "Enviar solicitud";
+    }
+  });
+</script>
+
+</body>
+</html>
